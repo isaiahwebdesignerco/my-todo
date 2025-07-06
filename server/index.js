@@ -104,29 +104,47 @@ app.delete('/tasks/:id', authenticateToken, async (req, res) => {
 
 // Register user
 app.post('/register', async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, username } = req.body;
 
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email and password required' });
+  // Basic validation
+  if (!email || !password || !username) {
+    return res.status(400).json({ error: 'Email, username, and password are required' });
   }
 
   try {
-    const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) {
-      return res.status(400).json({ error: 'User already exists' });
+    // Check if email or username already exists
+    const existingEmail = await prisma.user.findUnique({ where: { email } });
+    if (existingEmail) {
+      return res.status(400).json({ error: 'Email already in use' });
     }
 
+    const existingUsername = await prisma.user.findUnique({ where: { username } });
+    if (existingUsername) {
+      return res.status(400).json({ error: 'Username already in use' });
+    }
+
+    // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
 
+    // Create new user with username
     const newUser = await prisma.user.create({
-      data: { email, passwordHash }
+      data: {
+        email,
+        username,
+        passwordHash,
+      },
     });
 
     res.status(201).json({ message: 'User registered', userId: newUser.id });
   } catch (error) {
+    console.error('Registration error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });
+
+
+
+
 
 // Login user
 app.post('/login', async (req, res) => {
@@ -148,7 +166,7 @@ app.post('/login', async (req, res) => {
     }
 
     const token = jwt.sign(
-      { userId: user.id, email: user.email },
+      { userId: user.id, email: user.email, username: user.username },
       JWT_SECRET,
       { expiresIn: '1h' }
     );
